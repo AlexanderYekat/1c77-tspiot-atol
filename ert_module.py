@@ -465,8 +465,11 @@ def replace_text(ert_path: Path, source_path: Path, output_path: Path) -> None:
         source_bytes = text.encode("cp1251")
     except UnicodeEncodeError as exc:
         bad = text[exc.start : exc.end]
+        line = text.count("\n", 0, exc.start) + 1
+        col = exc.start - (text.rfind("\n", 0, exc.start) + 1) + 1
         raise ErtError(
-            f"Символ {bad!r} нельзя записать в модуль 1С 7.7 (нужна Windows-1251)"
+            f"Символ {bad!r} (U+{ord(bad[0]):04X}) в строке {line}:{col} "
+            f"нельзя записать в модуль 1С 7.7 (нужна Windows-1251)"
         ) from exc
 
     compressed = compress_module(source_bytes)
