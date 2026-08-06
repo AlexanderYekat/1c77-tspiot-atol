@@ -68,6 +68,21 @@ python kkt_client_emulator.py print-check --json sample-json-check.json
 
 ---
 
+### `print-nonfiscal` / `print-slip`
+
+**Endpoint:** `POST /print-check` с `"type": "nonFiscal"`
+
+Печать слипа (нефискальный документ АТОЛ: текст + QR).
+
+```bash
+python kkt_client_emulator.py print-nonfiscal
+python kkt_client_emulator.py print-nonfiscal --json sample-json-nonfiscal.json
+```
+
+Ожидаемый ответ: `result=1`, `nonFiscal=true`.
+
+---
+
 ### `check-marks`
 
 **Endpoint:** `POST /check-marks` (+ при `--async`: `GET /check-marks/status`)

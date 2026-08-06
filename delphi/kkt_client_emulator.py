@@ -24,6 +24,8 @@
   python kkt_client_emulator.py info
   python kkt_client_emulator.py smoke
   python kkt_client_emulator.py print-check --json receipt.json
+  python kkt_client_emulator.py print-nonfiscal
+  python kkt_client_emulator.py print-nonfiscal --json sample-json-nonfiscal.json
   python kkt_client_emulator.py close-shift --password 30
   python kkt_client_emulator.py queue-test
   python kkt_client_emulator.py queue-test --scenario async-burst --count 5
@@ -48,6 +50,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 
@@ -224,6 +227,51 @@ def sample_receipt(
         "payments": [{"type": pay_type, "sum": total}],
         "total": total,
         "password": password,
+    }
+
+
+def sample_nonfiscal_slip() -> dict[str, Any]:
+    """Пример слипа АТОЛ nonFiscal (ЕГАИС / банковский слип)."""
+    return {
+        "type": "nonFiscal",
+        "printFooter": True,
+        "items": [
+            {
+                "type": "text",
+                "text": "ИНН: 7725760410 КПП: 772501001",
+                "alignment": "center",
+            },
+            {
+                "type": "text",
+                "text": "КАССА: 00105700000011 СМЕНА:1",
+                "alignment": "center",
+            },
+            {
+                "type": "text",
+                "text": "ЧЕК: 1 ДАТА: 20.06.2017 14:12",
+                "alignment": "center",
+            },
+            {
+                "type": "barcode",
+                "barcode": "https://check.egais.ru?id=cf1b1096-3cbc-11e7-b3c1-9b018b2ba3f7",
+                "barcodeType": "QR",
+                "scale": 7,
+            },
+            {
+                "type": "text",
+                "text": "https://check.egais.ru?id=cf1b1096-3cbc-11e7-b3c1-9b018b2ba3f7",
+                "alignment": "center",
+            },
+            {
+                "type": "text",
+                "text": (
+                    "10 58 1c 85 ab 45 29 fa 34 a7 34 10 58 1c 85 ab 45 29 fa 34 a7 34 "
+                    "10 58 1c 85 ab 45 29 fa 34 a7 34 10 58 1c 85 ab 45 29 fa 34 a7 34 "
+                    "34 a7 34 10 58"
+                ),
+                "alignment": "center",
+            },
+        ],
     }
 
 
@@ -1431,6 +1479,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="skipMarkPreflight=true — не проверять марки перед печатью",
     )
 
+    nonfiscal = sub.add_parser(
+        "print-nonfiscal",
+        aliases=["print-slip"],
+        help="POST /print-check с type=nonFiscal (слип)",
+    )
+    nonfiscal.add_argument(
+        "--json",
+        help="Путь к JSON nonFiscal (по умолчанию встроенный пример / sample-json-nonfiscal.json)",
+    )
+
     sub.add_parser("close-shift", help="POST /close-shift — закрытие смены (Z-отчёт)")
     sub.add_parser("x-report", help="POST /x-report — X-отчёт без гашения")
     sub.add_parser("cancel-check", help="POST /cancel-check — отмена открытого чека")
@@ -1597,6 +1655,21 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
             resp = client.print_check(payload)
             print_response("POST /print-check", resp)
+            return 0 if resp.ok else 1
+
+        if args.command in ("print-nonfiscal", "print-slip"):
+            if args.json:
+                payload = load_json_file(args.json)
+            else:
+                sample_path = Path(__file__).with_name("sample-json-nonfiscal.json")
+                if sample_path.is_file():
+                    payload = load_json_file(str(sample_path))
+                else:
+                    payload = sample_nonfiscal_slip()
+            print("Тело запроса (nonFiscal):")
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            resp = client.print_check(payload)
+            print_response("POST /print-check (nonFiscal)", resp)
             return 0 if resp.ok else 1
 
         if args.command == "close-shift":

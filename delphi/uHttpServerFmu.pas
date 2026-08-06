@@ -57,7 +57,8 @@ var
   Value: PVSFixedFileInfo;
   Len: UINT;
 begin
-  Result := '0.0.0.0';
+  // Суффикс -atol: ветка под драйвер АТОЛ Fptr10 (не Штрих)
+  Result := '0.0.0.0-atol';
   Size := GetFileVersionInfoSize(PChar(ParamStr(0)), Handle);
   if Size = 0 then
     Exit;
@@ -66,7 +67,7 @@ begin
     if not GetFileVersionInfo(PChar(ParamStr(0)), 0, Size, Buffer) then
       Exit;
     if VerQueryValue(Buffer, '\', Pointer(Value), Len) then
-      Result := Format('%d.%d.%d.%d',
+      Result := Format('%d.%d.%d.%d-atol',
         [HiWord(Value^.dwFileVersionMS), LoWord(Value^.dwFileVersionMS),
          HiWord(Value^.dwFileVersionLS), LoWord(Value^.dwFileVersionLS)]);
   finally
@@ -77,7 +78,7 @@ end;
 function TFmuHttpServer.BuildHealthJson: string;
 begin
   Result := Format(
-    '{"result":1,"description":"OK","service":"%s","status":"up","version":"%s"}',
+    '{"result":1,"description":"OK","service":"%s","status":"up","version":"%s","driver":"atol"}',
     [JsonEscapeHealth(FServiceName), JsonEscapeHealth(FServiceVersion)]);
 end;
 

@@ -90,6 +90,10 @@ type
     function BuildAtolIndustryInfo(Item: TJSONObject; const MarkDecoded: string;
       ReturnCheck: Boolean): TJSONArray;
     function BuildAtolPayments(Req: TJSONObject): TJSONArray;
+    /// <summary>Клиентский nonFiscal (слип) → JSON-задание АТОЛ nonFiscal.</summary>
+    function BuildAtolNonFiscalJson(Req: TJSONObject): string;
+    function BuildAtolNonFiscalItem(Item: TJSONObject): TJSONObject;
+    function PrintNonFiscalFromRequest(Req: TJSONObject): string;
     function ExtractItemInfoCheckResult(const ValidationJson: string): TJSONObject;
     function DefaultItemInfoCheckResult(Accepted: Boolean): TJSONObject;
     function ExtractCheckNumberFromAtolResponse(const ResponseJson: string): Integer;
@@ -1738,6 +1742,8 @@ begin
        JsonEscape(FEmulatedFnNumber), JsonEscape(FEmulatedRegNumber),
        FEmulatedCheckNumber]);
   end
+  else if TaskType = 'nonfiscal' then
+    Result := '{}'
   else
     Result := '{}';
 end;
@@ -2284,6 +2290,119 @@ begin
   end;
 end;
 
+function TVariantPrint.BuildAtolNonFiscalItem(Item: TJSONObject): TJSONObject;
+var
+  ItemType, Align, BarcodeType, TextVal, BarcodeVal: string;
+  Scale: Integer;
+begin
+  Result := nil;
+  if Item = nil then
+    Exit;
+
+  ItemType := LowerCase(Trim(JStr(Item, 'type', 'text')));
+  if ItemType = 'text' then
+  begin
+    TextVal := JStr(Item, 'text');
+    // Пустую строку пропускаем (как в сборке слипа 1С)
+    if TextVal = '' then
+      Exit;
+    Result := TJSONObject.Create;
+    Result.AddPair('type', 'text');
+    Result.AddPair('text', TextVal);
+    Align := LowerCase(Trim(JStr(Item, 'alignment')));
+    if (Align = 'left') or (Align = 'center') or (Align = 'right') then
+      Result.AddPair('alignment', Align);
+    if Item.GetValue('font') <> nil then
+      Result.AddPair('font', TJSONNumber.Create(JInt(Item, 'font', 0)));
+    if Item.GetValue('doubleWidth') <> nil then
+      Result.AddPair('doubleWidth', TJSONBool.Create(JBool(Item, 'doubleWidth', False)));
+    if Item.GetValue('doubleHeight') <> nil then
+      Result.AddPair('doubleHeight', TJSONBool.Create(JBool(Item, 'doubleHeight', False)));
+  end
+  else if ItemType = 'barcode' then
+  begin
+    BarcodeVal := JStr(Item, 'barcode');
+    if BarcodeVal = '' then
+      Exit;
+    Result := TJSONObject.Create;
+    Result.AddPair('type', 'barcode');
+    Result.AddPair('barcode', BarcodeVal);
+    BarcodeType := Trim(JStr(Item, 'barcodeType', 'QR'));
+    if BarcodeType = '' then
+      BarcodeType := 'QR';
+    Result.AddPair('barcodeType', BarcodeType);
+    Scale := JInt(Item, 'scale', 0);
+    if Scale > 0 then
+      Result.AddPair('scale', TJSONNumber.Create(Scale));
+    Align := LowerCase(Trim(JStr(Item, 'alignment')));
+    if (Align = 'left') or (Align = 'center') or (Align = 'right') then
+      Result.AddPair('alignment', Align);
+  end
+  else
+    FLog.LogInfo('nonFiscal: пропуск items type="' + ItemType + '"');
+end;
+
+function TVariantPrint.BuildAtolNonFiscalJson(Req: TJSONObject): string;
+var
+  Job, Item, AtolItem: TJSONObject;
+  ItemsIn, ItemsOut: TJSONArray;
+  I: Integer;
+begin
+  Job := TJSONObject.Create;
+  try
+    Job.AddPair('type', 'nonFiscal');
+
+    ItemsOut := TJSONArray.Create;
+    ItemsIn := Req.GetValue('items') as TJSONArray;
+    if ItemsIn <> nil then
+    begin
+      for I := 0 to ItemsIn.Count - 1 do
+      begin
+        if not (ItemsIn.Items[I] is TJSONObject) then
+          Continue;
+        Item := TJSONObject(ItemsIn.Items[I]);
+        AtolItem := BuildAtolNonFiscalItem(Item);
+        if AtolItem <> nil then
+          ItemsOut.AddElement(AtolItem);
+      end;
+    end;
+    if ItemsOut.Count = 0 then
+    begin
+      ItemsOut.Free;
+      raise Exception.Create('nonFiscal: items пуст — нечего печатать');
+    end;
+    Job.AddPair('items', ItemsOut);
+
+    if Req.GetValue('printFooter') <> nil then
+      Job.AddPair('printFooter', TJSONBool.Create(JBool(Req, 'printFooter', True)))
+    else
+      Job.AddPair('printFooter', TJSONBool.Create(True));
+
+    Result := JsonToPlainText(Job);
+  finally
+    Job.Free;
+  end;
+end;
+
+function TVariantPrint.PrintNonFiscalFromRequest(Req: TJSONObject): string;
+var
+  AtolJson, Resp, ErrDesc: string;
+  ErrCode: Integer;
+begin
+  EnsureFRConnected;
+
+  AtolJson := BuildAtolNonFiscalJson(Req);
+  FLog.LogInfo('PrintNonFiscal ATOL JSON: ' + JsonBodyPreviewPlain(AtolJson, 800));
+
+  if not ProcessJsonAtol(AtolJson, 'nonFiscal', Resp, ErrCode, ErrDesc) then
+    raise Exception.Create(ErrDesc);
+
+  Result := JsonOk('"nonFiscal":true');
+  FLog.LogInfo('PrintNonFiscal OK');
+  // Кэш марок не сбрасываем — слип не завершает фискальный чек
+  AfterCommand(Req);
+end;
+
 function TVariantPrint.PrintCheckJson(const Body: string): string;
 var
   Req: TJSONObject;
@@ -2291,17 +2410,27 @@ var
   CheckNumber: Integer;
   CashierName, PreflightErr, AtolJson, Resp, ErrDesc, SerialNumber, Desc: string;
   ErrCode: Integer;
+  IsNonFiscal: Boolean;
 begin
   FLock.Enter;
   try
     Result := JsonError('Unknown error');
     Req := nil;
+    IsNonFiscal := False;
     try
       FLog.LogInfo('PrintCheckJson begin');
       EnsureFRConnected;
 
       Req := ParseJsonObjectOrRaise(Body, 'PrintCheckJson', FLog);
+      IsNonFiscal := SameText(Trim(JStr(Req, 'type')), 'nonFiscal');
 
+      // Слип / нефискальный документ АТОЛ (как ПечатьСлипаЧерезВнешнююПрограмму в 1С)
+      if IsNonFiscal then
+      begin
+        Result := PrintNonFiscalFromRequest(Req);
+      end
+      else
+      begin
       CashierName := GetCashierName(Req);
       EnsureSessionOpen(CashierName, GetCashierInn(Req));
 
@@ -2359,11 +2488,22 @@ begin
           AfterCommand(Req);
         end;
       end;
+      end; // not nonFiscal
     except
       on E: Exception do
       begin
         FLog.LogError('PrintCheckJson: ' + E.Message);
-        if FEmulation then
+        if IsNonFiscal then
+        begin
+          if FEmulation then
+          begin
+            Result := JsonOk('"nonFiscal":true');
+            AfterCommand(Req);
+          end
+          else
+            Result := JsonError(E.Message);
+        end
+        else if FEmulation then
         begin
           try
             CancelReceiptAtol('CancelReceipt after error', False);

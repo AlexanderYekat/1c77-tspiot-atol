@@ -79,7 +79,7 @@
 | GET | `/connection-status` | — | Статус связи + настройки из INI |
 | POST | `/connect` | — | Подключение к ККТ (АТОЛ open) |
 | POST | `/disconnect` | — | Отключение от ККТ |
-| POST | `/print-check` | JSON чека | Фискальная печать чека |
+| POST | `/print-check` | JSON чека или `nonFiscal` | Фискальный чек или слип (нефискальный документ) |
 | POST | `/check-marks` | JSON | Проверка марки(ок) на ККТ |
 | GET | `/check-marks/status` | — | Статус async-проверки (`?taskId=`) |
 | POST | `/close-shift` | `{}` или JSON | Z-отчёт, закрытие смены |
@@ -103,11 +103,13 @@
   "description": "OK",
   "service": "kktserverindy",
   "status": "up",
-  "version": "1.0.0.0"
+  "version": "2026.7.23.6-atol",
+  "driver": "atol"
 }
 ```
 
-`version` — версия файла исполняемого модуля.
+`version` — версия exe + суффикс `-atol` (ветка под АТОЛ Fptr10).  
+`driver` — всегда `"atol"` (раньше Штрих; отдельного значения нет).
 
 ---
 
@@ -188,7 +190,9 @@
 
 ## 8. `POST /print-check`
 
-Печать фискального чека по JSON. Полная схема — в `ТЗ_print-check_json.md` и `sample-json-check.json`.
+Печать фискального чека **или** нефискального документа (слип). Полная схема фискального чека — в `ТЗ_print-check_json.md` и `sample-json-check.json`.
+
+Если в корне `"type": "nonFiscal"` — печатается слип (§8.5), иначе — фискальный чек (`sell` / `sellReturn`).
 
 ### 8.1. Шапка чека
 
@@ -254,6 +258,68 @@
 
 - `markAccepted: true` — только отправка марки в чек (без полного онлайн-цикла).
 - Поле отсутствует или `false` при наличии `mark` — полный цикл на ККТ при печати (медленнее).
+
+### 8.6. Нефискальный документ / слип (`type: "nonFiscal"`)
+
+Тот же endpoint `POST /print-check`. Тело — JSON-задание АТОЛ `nonFiscal` (как в драйвере / `ПечатьСлипаЧерезВнешнююПрограмму` в 1С).
+
+| Поле | Тип | Обяз. | Описание |
+|------|-----|-------|----------|
+| `type` | string | да | `"nonFiscal"` |
+| `items` | array | да | `text` и/или `barcode` |
+| `printFooter` | bool | нет | по умолчанию `true` |
+
+Элемент `text`:
+
+| Поле | Описание |
+|------|----------|
+| `type` | `"text"` |
+| `text` | строка |
+| `alignment` | опционально: `left` / `center` / `right` |
+
+Элемент `barcode`:
+
+| Поле | Описание |
+|------|----------|
+| `type` | `"barcode"` |
+| `barcode` | данные (URL и т.п.) |
+| `barcodeType` | например `QR` |
+| `scale` | масштаб (число) |
+
+Пример:
+
+```json
+{
+  "type": "nonFiscal",
+  "printFooter": true,
+  "items": [
+    {
+      "type": "text",
+      "text": "ИНН: 7725760410 КПП: 772501001",
+      "alignment": "center"
+    },
+    {
+      "type": "barcode",
+      "barcode": "https://check.egais.ru?id=cf1b1096-3cbc-11e7-b3c1-9b018b2ba3f7",
+      "barcodeType": "QR",
+      "scale": 7
+    },
+    {
+      "type": "text",
+      "text": "https://check.egais.ru?id=cf1b1096-3cbc-11e7-b3c1-9b018b2ba3f7",
+      "alignment": "center"
+    }
+  ]
+}
+```
+
+**Успех:**
+
+```json
+{"result":1,"description":"OK","nonFiscal":true}
+```
+
+Кэш марок **не** сбрасывается. Смена не открывается специально (достаточно `connect`). Поддерживается `"disconnect": true`.
 
 ---
 
