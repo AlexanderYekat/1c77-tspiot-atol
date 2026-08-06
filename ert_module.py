@@ -9,6 +9,11 @@ Examples:
     python ert_module.py replace hello.ert module.txt hello_new.ert
     python ert_module.py show hello.ert
 
+Пакетный перенос между каталогами (отдельные скрипты, чтобы не перепутать направление):
+    python push_txt_to_ert.py --dry-run   # 1cv77/*.txt -> 1cv77-extforms/*.ert
+    python pull_ert_to_txt.py --dry-run   # 1cv77-extforms/*.ert -> 1cv77/*.txt
+    python sync_modules.py --dry-run      # авто по версии (куда новее)
+
 The module text is stored in the OLE/CFB stream "MD Programm text" as
 raw DEFLATE data encoded in Windows-1251.
 """
