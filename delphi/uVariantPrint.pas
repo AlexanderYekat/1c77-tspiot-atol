@@ -1,4 +1,4 @@
-﻿unit uVariantPrint;
+unit uVariantPrint;
 
 interface
 

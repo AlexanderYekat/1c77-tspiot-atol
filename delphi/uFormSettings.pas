@@ -1,4 +1,4 @@
-﻿unit uFormSettings;
+unit uFormSettings;
 
 interface
 

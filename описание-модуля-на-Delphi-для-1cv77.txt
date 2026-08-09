@@ -1,0 +1,221 @@
+Да. Причём **на Delphi это можно сделать даже проще, чем в моём Python-варианте**, потому что Windows сама умеет работать с OLE/Compound Storage через `IStorage/IStream`.
+
+Не придётся вручную реализовывать FAT/MiniFAT контейнера `.ert`.
+
+Схема такая:
+
+```text
+hello.ert
+   ↓ StgOpenStorage()
+OLE Storage
+   ↓ OpenStream('MD Programm text')
+сжатые байты
+   ↓ raw DEFLATE
+Windows-1251
+   ↓
+текст модуля
+```
+
+И обратно:
+
+```text
+текст
+ ↓ CP1251
+raw DEFLATE
+ ↓
+IStream.SetSize(...)
+IStream.Write(...)
+ ↓
+hello_new.ert
+```
+
+### Главное
+
+Поток называется:
+
+```delphi
+'MD Programm text'
+```
+
+Открыть ERT можно стандартными средствами Windows:
+
+```delphi
+uses
+  Winapi.Windows,
+  Winapi.ActiveX,
+  System.SysUtils,
+  System.Classes;
+```
+
+Пример открытия:
+
+```delphi
+var
+  Storage: IStorage;
+  Stream: IStream;
+begin
+  OleCheck(
+    StgOpenStorage(
+      PWideChar(FileName),
+      nil,
+      STGM_READWRITE or STGM_SHARE_EXCLUSIVE,
+      nil,
+      0,
+      Storage
+    )
+  );
+
+  OleCheck(
+    Storage.OpenStream(
+      'MD Programm text',
+      nil,
+      STGM_READWRITE or STGM_SHARE_EXCLUSIVE,
+      0,
+      Stream
+    )
+  );
+end;
+```
+
+И это очень удобно: **неважно, находится поток в MiniFAT или обычном FAT**. Windows сама этим занимается.
+
+Для чтения размера:
+
+```delphi
+var
+  Stat: TStatStg;
+begin
+  OleCheck(Stream.Stat(Stat, STATFLAG_NONAME));
+
+  SetLength(Data, Stat.cbSize);
+  Stream.Read(@Data[0], Length(Data), nil);
+end;
+```
+
+Для обратной записи:
+
+```delphi
+NewSize := Length(CompressedData);
+
+OleCheck(Stream.SetSize(NewSize));
+
+Pos.QuadPart := 0;
+OleCheck(Stream.Seek(Pos, STREAM_SEEK_SET, nil));
+
+OleCheck(
+  Stream.Write(
+    @CompressedData[0],
+    Length(CompressedData),
+    nil
+  )
+);
+
+OleCheck(Stream.Commit(STGC_DEFAULT));
+OleCheck(Storage.Commit(STGC_DEFAULT));
+```
+
+Таким образом можно записывать **модуль любого нового размера**, а Windows сама перестроит внутреннюю структуру OLE.
+
+### Единственный интересный момент — DEFLATE
+
+В 1С 7.7 там не обычный `.zip`, а **raw DEFLATE**.
+
+То есть для zlib надо использовать:
+
+```c
+inflateInit2(..., -15)
+```
+
+а для упаковки:
+
+```c
+deflateInit2(..., ..., ..., -15, ...)
+```
+
+Минус у `windowBits` как раз означает:
+
+> DEFLATE без zlib-заголовка.
+
+Поэтому обычного `TZCompressionStream` я бы здесь не использовал вслепую. Лучше сделать небольшой Delphi-wrapper над zlib с `deflateInit2/inflateInit2`.
+
+### Кодировка
+
+После распаковки получаем:
+
+```text
+CP1251 bytes
+```
+
+В современном Delphi можно преобразовать так:
+
+```delphi
+Encoding := TEncoding.GetEncoding(1251);
+Text := Encoding.GetString(Data);
+```
+
+И обратно:
+
+```delphi
+Data := Encoding.GetBytes(Text);
+```
+
+---
+
+Я бы в Delphi сделал маленький модуль примерно такого API:
+
+```delphi
+unit ErtModule;
+
+interface
+
+function ReadErtModule(const FileName: string): string;
+
+procedure WriteErtModule(
+  const SourceERT: string;
+  const DestERT: string;
+  const ModuleText: string
+);
+
+implementation
+...
+end.
+```
+
+Тогда использование будет буквально:
+
+```delphi
+var
+  Text: string;
+begin
+  Text := ReadErtModule('hello.ert');
+
+  Writeln(Text);
+
+  Text := StringReplace(
+    Text,
+    'Сообщить("Привет");',
+    'Сообщить("Привет из Delphi");',
+    []
+  );
+
+  WriteErtModule(
+    'hello.ert',
+    'hello_new.ert',
+    Text
+  );
+end;
+```
+
+И можно сделать консольную утилиту с тем же интерфейсом, что у Python:
+
+```bat
+ertmodule.exe extract hello.ert module.txt
+
+ertmodule.exe show hello.ert
+
+ertmodule.exe replace hello.ert module.txt hello_new.ert
+```
+
+Причём **я бы предпочёл Delphi-вариант Python-варианту именно для Windows/1С 7.7**: работу с Compound File отдаём штатному Windows `IStorage`, а своего кода остаётся совсем немного — чтение потока + raw DEFLATE + CP1251.
+
+Если делать, я бы написал под ваш **Delphi 23.0** полноценный проект с `ErtModule.pas` и консольным `.dpr`, без сторонних Delphi-компонентов. Для zlib можно также сделать так, чтобы не требовались никакие Python/COM-регистрации.

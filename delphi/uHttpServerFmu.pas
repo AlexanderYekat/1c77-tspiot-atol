@@ -1,4 +1,4 @@
-﻿unit uHttpServerFmu;
+unit uHttpServerFmu;
 
 interface
 

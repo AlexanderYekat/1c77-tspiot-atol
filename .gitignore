@@ -1,63 +1,47 @@
 # =============================================================================
-# ккт-proxy-for-tspiot — интеграционный мост 1С 7.7 / C# proxy / Delphi KKT
+# 1c77-tspiot-atol — Delphi KKT-сервер + модули 1С 7.7
 # =============================================================================
 
-# --- OS ---
+# --- OS / редакторы ---
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
-Icon?
-
-# --- IDE / редакторы ---
 .vs/
 .vscode/
 .idea/
 *.suo
 *.user
-*.sln.docstates
 *.swp
 *.swo
 *~
 *.orig
+*.lnk
 
-# --- Секреты и локальные настройки ---
+# --- Секреты ---
 .env
 .env.*
 !.env.example
-appsettings.*.local.json
-secrets.json
 
 # =============================================================================
-# 1С 7.7
+# 1С 7.7 (1cv77/)
 # =============================================================================
 
-# Бинарные внешние обработки (в репозитории хранятся текстовые .ert.txt)
+# Бинарные внешние обработки (исходники — текстовые .txt)
 *.ert
-
-# Рабочие каталоги выгрузки/компиляции внешних обработок
 1cv77-extforms/
-через-внешнюю-программу/
-через-внешнюю-программу-old/
-через-внешнюю-программу-rezerv/
 
-# Артефакты установщика внешних обработок 1С
+# Выход Inno Setup (installer_1cv77_extforms.iss)
 1cv77/output/
 
 # =============================================================================
 # Delphi (delphi/)
 # =============================================================================
 
-# Каталоги сборки
+# Каталоги сборки RAD Studio
 Win32/
 Win64/
-OSX64/
-OSXARM64/
-Android/
-Android64/
-iOSDevice64/
-Linux64/
 
 # Бинарники и промежуточные файлы компилятора
 *.exe
@@ -65,45 +49,39 @@ Linux64/
 *.bpl
 *.bpi
 *.dcp
-*.so
-*.apk
+*.dcu
 *.drc
 *.map
 *.dres
 *.rsm
 *.tds
-*.dcu
 *.lib
-*.a
+*.obj
 *.o
 *.ocx
-*.obj
 
-# Автогенерируемые и локальные файлы IDE
-*.cfg
-*.hpp
-*Resource.rc
+# Локальные / автогенерируемые файлы IDE
 *.local
 *.identcache
 *.projdata
 *.tvsconfig
 *.dsk
 *.dsv
-*.ddp
-*.vlb
-*.deployproj
 *.stat
+*.cfg
+*.hpp
 
-# История и бэкапы Delphi
+# История и бэкапы
 __history/
 __recovery/
 *.~*
 
-# Локальные ini-настройки запуска (порты, эмуляция ККТ)
+# Локальные ini (порты, эмуляция ККТ) и логи
 delphi/**/*.ini
+*.log
 
-# Boss dependency manager
-modules/
+# Выход Inno Setup (installer_kktserver.iss)
+delphi/output/
 
 # =============================================================================
 # Python (эмуляторы delphi/*.py)
@@ -112,88 +90,8 @@ modules/
 __pycache__/
 *.py[cod]
 *$py.class
-*.py.cover
 .pytest_cache/
-.ruff_cache/
 .mypy_cache/
+.ruff_cache/
 .venv/
 venv/
-ENV/
-.envrc
-.pdm-python
-.pdm-build/
-tempCodeRunnerFile.py
-
-# =============================================================================
-# C# / .NET (csharp/)
-# =============================================================================
-
-[Dd]ebug/
-[Rr]elease/
-x64/
-[Bb]in/
-[Oo]bj/
-publish/
-*.nupkg
-**/packages/*
-!**/packages/build/
-[Tt]est[Rr]esult*/
-[Bb]uild[Ll]og.*
-*.pdb
-*.ilk
-*.meta
-*.pch
-*.pgc
-*.pgd
-*.rsp
-*.sbr
-*.tlb
-*.tli
-*.tlh
-*.tmp
-*.tmp_proj
-*.log
-*.vspscc
-*.vssscc
-.builds
-*.pidb
-*.scc
-ipch/
-*.aps
-*.ncb
-*.opensdf
-*.sdf
-*.cachefile
-*.psess
-*.vsp
-*.vspx
-_ReSharper*/
-*.[Rr]e[Ss]harper
-_TeamCity*
-*.dotCover
-*.ncrunch*
-.*crunch*.local.xml
-[Ee]xpress/
-project.lock.json
-*.vc.vc.opendb
-*.vc.db
-**/*.sln.ide
-
-# Артефакты сборки и установщика
-csharp/output/
-csharp/for_build/proxy/runtimes/
-csharp/for_build/proxy/wwwroot/
-csharp/for_build/proxy/*.dll
-csharp/for_build/proxy/*.exe
-csharp/for_build/proxy/*.pdb
-
-# Исходники C# лежат в отдельном репозитории (git submodule csharp/CtoCSharpProxyFmu)
-
-# =============================================================================
-# Прочее по проекту
-# =============================================================================
-
-# Qodo / личные заметки
-.qodo/
-zap.txt
-*.lnk
