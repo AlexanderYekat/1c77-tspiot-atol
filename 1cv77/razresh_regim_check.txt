@@ -1,3 +1,5 @@
+// component: 1c77-atol-razresh_regim_check
+// version: 2026.08.06-02
 //razresh_regim_check ver: 2026.08.06-02
 // line: proxy-команды + совместимость поля марки QRкод/Маркировка
 Перем гПутьКОтчету;                                      

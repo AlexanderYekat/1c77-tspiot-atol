@@ -1,3 +1,5 @@
+// component: 1c77-atol-permissive_regime_2024
+// version: 2026.08.06-02
 //permissive_regime_2024 ver: 2026.08.06-02
 // line: перенос из out + proxy (этап 5/6 ТЗ)
 Перем глСоединение, глПередПараметры, глHTTPДвижок, глHTTPТаймаутМс, глHTTPТаймаутБезОжиданияМс;

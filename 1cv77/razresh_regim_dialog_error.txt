@@ -1,3 +1,5 @@
+// component: 1c77-atol-razresh_regim_dialog_error
+// version: 2026.08.06-02
 //razresh_regim_dialog_error ver: 2026.08.06-02
 // line: отображение QRкод при пустой Маркировке
 Перем глЭтотМодульИмяМодкуля, глЭтотМодульВерсияМодуля;
