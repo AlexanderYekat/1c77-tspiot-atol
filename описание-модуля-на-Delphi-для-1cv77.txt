@@ -1,3 +1,8 @@
+﻿[УСТАРЕЛО] Канон: ../1c77-kkt-updater/docs/ARCHITECTURE_AND_UPDATE_SPEC.md
+Этот файл — справочник по OLE/IStorage, raw DEFLATE и CP1251 для ERT.
+
+---
+
 Да. Причём **на Delphi это можно сделать даже проще, чем в моём Python-варианте**, потому что Windows сама умеет работать с OLE/Compound Storage через `IStorage/IStream`.
 
 Не придётся вручную реализовывать FAT/MiniFAT контейнера `.ert`.

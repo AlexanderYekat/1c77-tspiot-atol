@@ -5,7 +5,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes,
   System.IniFiles, System.DateUtils, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs,
-  uHttpServerFmu, Vcl.StdCtrls, uVariantPrint, uKktLog, uFormSettings;
+  Vcl.ExtCtrls, uHttpServerFmu, Vcl.StdCtrls, uVariantPrint, uKktLog, uFormSettings;
 
 type
   TkktServerIndyForm = class(TForm)
@@ -20,6 +20,7 @@ type
     procedure FormDestroy(Sender: TObject);
     procedure ButtonStopServerClick(Sender: TObject);
     procedure OptionsButtonClick(Sender: TObject);
+    procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
   private
     HttpServer: TFmuHttpServer;
     FVariantPrint: TVariantPrint;
@@ -27,12 +28,20 @@ type
     FListenPort: Integer;
     FUiLogMaxLines: Integer;
     FFirstRunMessage: string;
+    FTrayIcon: TTrayIcon;
+    FAllowClose: Boolean;
     procedure AppendLogLine(const Line: string);
     procedure HandleLogLine(Sender: TObject; const Line: string);
     procedure BindLoggerUi;
     procedure UnbindLoggerUi;
     function ServerIsRunning: Boolean;
     procedure EnsureSettings;
+    procedure HideToTray;
+    procedure RestoreFromTray;
+    procedure TrayIconDblClick(Sender: TObject);
+    procedure HandleHttpExitRequest(Sender: TObject);
+    procedure RequestRealExit;
+    procedure WMQueryEndSession(var Msg: TWMQueryEndSession); message WM_QUERYENDSESSION;
   public
     { Public declarations }
   end;
@@ -46,6 +55,16 @@ implementation
 
 procedure TkktServerIndyForm.FormCreate(Sender: TObject);
 begin
+  FAllowClose := False;
+  FTrayIcon := TTrayIcon.Create(Self);
+  FTrayIcon.Visible := False;
+  FTrayIcon.Hint := 'ККТ сервер (в трее; выход только через HTTP /exit)';
+  FTrayIcon.OnDblClick := TrayIconDblClick;
+  if not Application.Icon.Empty then
+    FTrayIcon.Icon.Assign(Application.Icon)
+  else if not Icon.Empty then
+    FTrayIcon.Icon.Assign(Icon);
+
   VersionLabel.Caption := 'Версия: ' + TFmuHttpServer.ReadExeFileVersion;
   ButtonStartServerClick(nil);
 end;
@@ -113,6 +132,78 @@ begin
     [IniPath]);
 end;
 
+procedure TkktServerIndyForm.HideToTray;
+begin
+  if Assigned(FTrayIcon) then
+  begin
+    if FTrayIcon.Icon.Handle = 0 then
+    begin
+      if not Application.Icon.Empty then
+        FTrayIcon.Icon.Assign(Application.Icon)
+      else if not Icon.Empty then
+        FTrayIcon.Icon.Assign(Icon);
+    end;
+    FTrayIcon.Visible := True;
+  end;
+  Hide;
+  if Assigned(FVariantPrint) and Assigned(FVariantPrint.Logger) then
+    FVariantPrint.Logger.LogInfo(
+      'Окно скрыто в трей (процесс работает; выход: POST/GET /exit)');
+end;
+
+procedure TkktServerIndyForm.RestoreFromTray;
+begin
+  Show;
+  WindowState := wsNormal;
+  Application.BringToFront;
+  SetForegroundWindow(Handle);
+  if Assigned(FTrayIcon) then
+    FTrayIcon.Visible := False;
+end;
+
+procedure TkktServerIndyForm.TrayIconDblClick(Sender: TObject);
+begin
+  RestoreFromTray;
+end;
+
+procedure TkktServerIndyForm.RequestRealExit;
+begin
+  FAllowClose := True;
+  if Assigned(FTrayIcon) then
+    FTrayIcon.Visible := False;
+  Application.Terminate;
+end;
+
+procedure TkktServerIndyForm.HandleHttpExitRequest(Sender: TObject);
+begin
+  // Indy вызывает из своего потока — Terminate только в UI-потоке.
+  TThread.Queue(nil,
+    procedure
+    begin
+      if Assigned(FVariantPrint) and Assigned(FVariantPrint.Logger) then
+        FVariantPrint.Logger.LogInfo('HTTP /exit: завершение процесса');
+      RequestRealExit;
+    end);
+end;
+
+procedure TkktServerIndyForm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+begin
+  if FAllowClose then
+  begin
+    CanClose := True;
+    Exit;
+  end;
+  CanClose := False;
+  HideToTray;
+end;
+
+procedure TkktServerIndyForm.WMQueryEndSession(var Msg: TWMQueryEndSession);
+begin
+  // Завершение сеанса Windows — разрешаем реальный выход.
+  FAllowClose := True;
+  inherited;
+end;
+
 procedure TkktServerIndyForm.OptionsButtonClick(Sender: TObject);
 begin
   EnsureSettings;
@@ -149,6 +240,7 @@ begin
   BindLoggerUi;
 
   HttpServer := TFmuHttpServer.Create(KktPort, FVariantPrint);
+  HttpServer.OnExitRequest := HandleHttpExitRequest;
   LogsMemo.Lines.BeginUpdate;
   try
     LogsMemo.Clear;
